@@ -1,7 +1,7 @@
-package edu.neu.coe.csye7200.titanic
+package titanic_eda
 
-import org.apache.spark.sql.{SparkSession, DataFrame, RelationalGroupedDataset}
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.{DataFrame, RelationalGroupedDataset, SparkSession}
 
 
 object TitanicDatasetAnalyzer {

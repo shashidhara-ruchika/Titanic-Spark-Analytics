@@ -8,8 +8,6 @@ javaOptions += "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
 
 Compile / doc / scalacOptions ++= Seq("-groups", "-implicits", "-deprecation", "-Ywarn-dead-code", "-Ywarn-value-discard", "-Ywarn-unused" )
 
-Test / parallelExecution := false
-
 val sparkVersion = "3.3.0"
 
 libraryDependencies ++= Seq(
@@ -19,4 +17,10 @@ libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-mllib" % sparkVersion
 )
 
+javaOptions ++= Seq(
+  "--add-opens", "java.base/java.nio=ALL-UNNAMED",
+  "--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED",
+  "--add-opens", "java.base/java.util=ALL-UNNAMED",
+  "--add-opens", "java.base/java.lang.invoke=ALL-UNNAMED"
+)
 
