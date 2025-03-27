@@ -47,14 +47,10 @@
 4. Add Program Arguments:
    Add the relative path of the dataset (based on what the Working Directory is) (OR) Add the absolute path of the dataset.
 
-TitanicDatasetAnalyzer 
-```
-
-```
 
 TitanicDatasetAnalyzer
 ```
-src/main/resources/train.csv
+src\main\resources\train.csv
 ```
 
 TitanicTrain
@@ -83,10 +79,7 @@ src\main\resources\gender_submission.csv predictions\test
 
 Run Exploratory Data Analysis:
 ```
-
-```
-```
-sbt "runMain titanic_eda.TitanicDatasetAnalyzer src/main/resources/train.csv"
+sbt "runMain titanic_eda.TitanicDatasetAnalyzer src\main\resources\train.csv"
 ```
 
 Train the Model (Usage: TitanicTrain <model_output_path> <train_file>):

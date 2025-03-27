@@ -1,7 +1,8 @@
 package titanic_eda
 
-import org.apache.spark.sql.functions._
+import org.apache.spark.sql.functions.{round, _}
 import org.apache.spark.sql.{DataFrame, RelationalGroupedDataset, SparkSession}
+import titanic_ml.TitanicDataPreprocessor
 
 
 object TitanicDatasetAnalyzer {
@@ -67,13 +68,12 @@ object TitanicDatasetAnalyzer {
         val rowCount = df.count()
         println(s"Total number of rows: $rowCount")
 
+        df.describe("Survived", "Pclass", "Sex", "Age", "SibSp", "Parch", "Fare", "Embarked").show()
+
         // Check which columns have empty values
         println("\nNull Count by each column:")
         val columnNullCountDf = df.select(df.columns.map(c => count(when(col(c).isNull, 1)).alias(c)): _*)
         columnNullCountDf.show()
-
-        println("In the assignment, there are some questions around Age," +
-            "\nso I will not be filling the empty values in Cabin & Embarked columns\n")
 
         // Decide what to use to fill empty values in Age column with intuition of grouping with Pclass & Sex
         // If Skewness is low, age can be filled with its mean, or else its median
@@ -93,15 +93,7 @@ object TitanicDatasetAnalyzer {
         val pclassSexGroupedAgeStatistics = calculateAgeStatistics(df.groupBy("Pclass", "Sex"))
         pclassSexGroupedAgeStatistics.orderBy("Pclass", "Sex").show()
 
-        println("Since skewness is comparatively low when grouped by Pclass & Sex, to answer some questions, " +
-            "\nI introduced a new column \"AgeFilled\" " +
-            "which contains Ages along empty values filled with its Mean grouped by Pclass & Sex")
-
-        df.join(
-            pclassSexGroupedAgeStatistics.select(col("Pclass"), col("Sex"), col("Mean").alias("GroupedMeanAge")),
-            Seq("Pclass", "Sex"),
-            "left"
-        ).withColumn("AgeFilled", coalesce(col("Age"), col("GroupedMeanAge"))).drop("GroupedMeanAge")
+        TitanicDataPreprocessor.preprocessData(df)
     }
 
     def performExploratoryDataAnalysis(titanicDf: DataFrame): Unit = {
@@ -156,23 +148,24 @@ object TitanicDatasetAnalyzer {
         println(s"\n\n4. Number of passengers who could possibly be Jack: ${possibleJackCount}")
 
 
-        println("\n\nI have considered the \"Age Filled\" column (Empty values of Age were filled with its mean grouped by Pclass & Sex) " +
-            "\nto ensure that all passengers fall into a category")
+        println("\n\nI have considered mean to be filled for the the \"Age \" column\n" +
+            "as the skewness is low and the mean is close to the median\n" +
+            "and the Age column is not normally distributed")
 
         // 5. Split the age for every 10 years. 1-10 as one age group, 11- 20 as another etc.
         println("\n5. Splitting Age Group for every 10 years:")
         val titanicDfWithAgeGrouped = titanicDf.withColumn("AgeGroup",
-            when(col("AgeFilled") > 0 && col("AgeFilled") <= 10, "0-10")
-                .when(col("AgeFilled") > 10 && col("AgeFilled") <= 20, "11-20")
-                .when(col("AgeFilled") > 20 && col("AgeFilled") <= 30, "21-30")
-                .when(col("AgeFilled") > 30 && col("AgeFilled") <= 40, "31-40")
-                .when(col("AgeFilled") > 40 && col("AgeFilled") <= 50, "41-50")
-                .when(col("AgeFilled") > 50 && col("AgeFilled") <= 60, "51-60")
-                .when(col("AgeFilled") > 60 && col("AgeFilled") <= 70, "61-70")
-                .when(col("AgeFilled") > 70 && col("AgeFilled") <= 80, "71-80")
-                .when(col("AgeFilled") > 80 && col("AgeFilled") <= 90, "81-90")
-                .when(col("AgeFilled") > 90 && col("AgeFilled") <= 100, "91-100")
-                .when(col("AgeFilled") > 100, "100+")
+            when(col("Age") > 0 && col("Age") <= 10, "0-10")
+                .when(col("Age") > 10 && col("Age") <= 20, "11-20")
+                .when(col("Age") > 20 && col("Age") <= 30, "21-30")
+                .when(col("Age") > 30 && col("Age") <= 40, "31-40")
+                .when(col("Age") > 40 && col("Age") <= 50, "41-50")
+                .when(col("Age") > 50 && col("Age") <= 60, "51-60")
+                .when(col("Age") > 60 && col("Age") <= 70, "61-70")
+                .when(col("Age") > 70 && col("Age") <= 80, "71-80")
+                .when(col("Age") > 80 && col("Age") <= 90, "81-90")
+                .when(col("Age") > 90 && col("Age") <= 100, "91-100")
+                .when(col("Age") > 100, "100+")
         )
         val ageGroupStatisticsDf = titanicDfWithAgeGrouped.groupBy("AgeGroup")
             .agg(
@@ -190,6 +183,77 @@ object TitanicDatasetAnalyzer {
 
         // Which age group most likely survived ?
         println(s"\nAge Group with the highest survival percentage: ${highestSurvivalAgeGroup.getAs[String]("AgeGroup")}")
+
+        // 6. Value counts of the columns
+        println("\n\n6. Value counts of the columns:")
+        titanicDf.groupBy("Survived").count().show()
+        println("Only 342 Passengers survived out of 891\n\n")
+
+        titanicDf.groupBy("Pclass").count().show()
+        println("Most number of passengers from 3rd ticket class\n\n")
+
+        titanicDf.groupBy("Embarked").count().show()
+        println("Most number of passengers, count = 644 embarked from Southampton\n\n")
+
+
+        // 7. Correlation between the columns
+        println("\n\n7. Correlation between the columns:")
+        titanicDf.select(corr("Survived", "Pclass").alias("Survived_Pclass"),
+            corr("Survived", "Age").alias("Survived_Age"),
+            corr("Survived", "SibSp").alias("Survived_SibSp"),
+            corr("Survived", "Parch").alias("Survived_Parch"),
+            corr("Survived", "Fare").alias("Survived_Fare"),
+            corr("Survived", "FamilySize").alias("Survived_FamilySize"),
+            corr("Survived", "SexIndex").alias("Survived_SexIndex")
+        ).show()
+        println("There is high correlation between the columns: Survived & Pclass, Survived & Fare, Survived & SexIndex\n\n")
+
+        // 8. Survival Rate by Gender
+        println("8. Survival Rate by Gender:")
+        titanicDf.groupBy("Sex")
+            .agg(round(avg("Survived") * 100, 2).alias("SurvivalRate"), count("*").alias("TotalPassengers"), avg("Survived").alias("SurvivalRate"))
+            .show()
+        println("Females more likely survived\n\n")
+
+        // 9. Survival Rate, Ticket Fare & Count by Embarkation Port
+        println("9. Survival Rate by Embarkation Port:")
+        titanicDf.groupBy("Embarked")
+            .agg(round(avg("Survived") * 100, 2).alias("SurvivalRate"), round(avg("Fare"), 2).alias("AverageFare"), count("*").alias("TotalPassengers"), avg("Survived").alias("SurvivalRate"))
+            .show()
+        println("No conclusive remark with survival rate, but ticket prices were the highest from Cherbourg\n\n")
+
+        // 10. Survival Rate by Pclass
+        println("10. Survival Rate by Pclass:")
+        titanicDf.groupBy("Pclass")
+            .agg(round(avg("Survived") * 100, 2).alias("SurvivalRate"), count("*").alias("TotalPassengers"), avg("Survived").alias("SurvivalRate"))
+            .show()
+        println("1st class more likely survived\n\n")
+
+        // 11. Family Size Count
+        println("11. Family Size Count:")
+        titanicDf.groupBy("FamilySize")
+            .agg(count("*").alias("TotalPassengers"))
+            .show()
+        println("11. More than 50% of passengers traveled alone\n\n")
+
+        // 12. Ticket Fare by Pclass, Sex
+        println("12. Ticket Fare by Pclass, Sex")
+        titanicDf.groupBy("Pclass", "Sex")
+            .agg(round(avg("Fare"), 2).alias("AverageFare"), count("*").alias("TotalPassengers"), round(avg("Survived") * 100, 2).alias("SurvivalRate"))
+            .show()
+        println("1st class & females were given more preference\n\n")
+
+        // 13. Ticket Fare by Pclass, Embarked
+        println("13. Ticket Fare by Pclass, Embarked")
+        titanicDf.groupBy("Pclass", "Embarked")
+            .agg(round(avg("Fare"), 2).alias("AverageFare"), count("*").alias("TotalPassengers"), round(avg("Survived") * 100, 2).alias("SurvivalRate"))
+            .orderBy("Pclass", "Embarked")
+            .show()
+        println("1st class passengers embarked from Cherbourg paid the highest fare")
+        println("3rd class passengers embarked from Queenstown paid the lowest fare")
+        println("For 1st & 2nd class passengers, the highest fare was paid by passengers embarked from Cherbourg, then Southampton and then Queenstown\n\n")
+
+
     }
 
 }
